@@ -13,8 +13,24 @@ DEFAULT_CONFIG = {
     "downloaded_versions": [],
     "fabric_loader_version": "",
     "minecraft_directory": ".lettmine",
-    "profiles": [],
 }
+
+
+def _read_json(path, fallback_path=None):
+    """Личный файл (config.json / styles.json), а если его нет — пример из репозитория.
+
+    Личные файлы в git не попадают (.gitignore); при первом сохранении они создаются
+    из примера, а сам пример остаётся нетронутым.
+    """
+    for p in (path, fallback_path):
+        if not p:
+            continue
+        try:
+            with open(p, "r", encoding="utf-8") as file:
+                return json.load(file)
+        except (FileNotFoundError, json.JSONDecodeError):
+            continue
+    return {}
 
 
 class Config:
@@ -25,11 +41,7 @@ class Config:
         self.load_styles()
 
     def load_config(self):
-        try:
-            with open(self.config_path, "r", encoding="utf-8") as file:
-                self.config = json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            self.config = {}
+        self.config = _read_json(self.config_path, os.path.join(DATA_DIR, "config.example.json"))
         for key, value in DEFAULT_CONFIG.items():
             self.config.setdefault(key, list(value) if isinstance(value, list) else value)
 
@@ -39,11 +51,7 @@ class Config:
             json.dump(self.config, file, indent=4, ensure_ascii=False)
 
     def load_styles(self):
-        try:
-            with open(self.styles_path, "r", encoding="utf-8") as file:
-                self.styles = json.load(file)
-        except (FileNotFoundError, json.JSONDecodeError):
-            self.styles = {}
+        self.styles = _read_json(self.styles_path, os.path.join(DATA_DIR, "styles.example.json"))
 
     def save_styles(self):
         os.makedirs(DATA_DIR, exist_ok=True)
@@ -110,19 +118,6 @@ class Config:
     def minecraft_directory(self, value):
         self.config["minecraft_directory"] = value
         self.save_config()
-
-    def add_profile(self, profile):
-        self.config["profiles"].append(profile)
-        self.save_config()
-
-    def remove_profile(self, profile_name):
-        self.config["profiles"] = [
-            p for p in self.config["profiles"] if p["name"] != profile_name
-        ]
-        self.save_config()
-
-    def get_profiles(self):
-        return self.config.get("profiles", [])
 
     def get_styles(self):
         return self.styles

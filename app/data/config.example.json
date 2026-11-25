@@ -1,0 +1,17 @@
+{
+    "language": "ru",
+    "minecraft_directory": ".lettmine",
+    "java_path": "",
+    "allocated_memory": 2,
+    "microsoft_client_id": "",
+    "account": {
+        "type": "offline",
+        "offline_name": "",
+        "microsoft": null
+    },
+    "instances": [],
+    "selected_instance": null,
+    "downloaded_versions": [],
+    "fabric_loader_version": "",
+    "launcher_path": ""
+}

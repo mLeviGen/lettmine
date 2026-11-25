@@ -28,7 +28,7 @@ class Versions:
             return []
 
     @staticmethod
-    def available_versions(minecraft_directory, type="release"):
+    def available_versions(minecraft_directory=None, type="release"):
         """Список версий с серверов Mojang; при отсутствии интернета — пустой."""
         try:
             return [
@@ -36,8 +36,7 @@ class Versions:
                 for v in minecraft_launcher_lib.utils.get_version_list()
                 if v["type"] == type
             ]
-        except Exception as e:
-            print("Не удалось получить список версий (нет интернета?):", e)
+        except Exception:
             return []
 
 
@@ -50,16 +49,23 @@ def offline_uuid(username):
     return str(uuid.UUID(bytes=bytes(digest)))
 
 
-def build_launch_command(config, version, username):
-    """Собирает команду запуска игры для minecraft-launcher-lib 8.x."""
+def build_launch_command(config, version, username, player_uuid=None, token=None, game_dir=None, memory=None):
+    """Собирает команду запуска игры для minecraft-launcher-lib 8.x.
+
+    Без player_uuid/token — оффлайн-режим (UUID по нику), с ними — лицензия.
+    game_dir — папка профиля (моды, миры, настройки); версии и библиотеки общие.
+    """
+    mem = memory or config.allocated_memory
     options = {
         "username": username,
-        "uuid": offline_uuid(username),
-        "token": "0",
+        "uuid": player_uuid or offline_uuid(username),
+        "token": token or "0",
         "launcherName": "LettMine",
-        "launcherVersion": "0.7",
-        "jvmArguments": [f"-Xmx{config.allocated_memory}G", f"-Xms{min(config.allocated_memory, 1)}G"],
+        "launcherVersion": "0.9",
+        "jvmArguments": [f"-Xmx{mem}G", f"-Xms{min(mem, 1)}G"],
     }
+    if game_dir:
+        options["gameDirectory"] = game_dir
     # Свой Java используем, только если путь реально существует. Иначе библиотека
     # сама подберёт нужную JVM (Java 17 для 1.20.x, Java 21 для 1.21+).
     if config.java_path and os.path.isfile(config.java_path):
@@ -70,6 +76,18 @@ def build_launch_command(config, version, username):
     )
 
 
-def launch(command, minecraft_directory):
-    """Запускает игру, не блокируя вызывающий код."""
-    return subprocess.Popen(command, cwd=minecraft_directory)
+def launch(command, cwd, capture=False):
+    """Запускает игру, не блокируя вызывающий код.
+
+    capture=True — без отдельного окна консоли, вывод игры читается через proc.stdout
+    (его показывает вкладка «Лог»).
+    """
+    os.makedirs(cwd, exist_ok=True)
+    if not capture:
+        return subprocess.Popen(command, cwd=cwd)
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    return subprocess.Popen(
+        command, cwd=cwd, creationflags=flags,
+        stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, encoding="utf-8", errors="replace", bufsize=1,
+    )
