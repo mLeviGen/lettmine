@@ -1,35 +1,35 @@
 # LettMine
 
-Лаунчер Minecraft: Java Edition для Windows из семейства приложений LettCup.
+A Minecraft: Java Edition launcher for Windows, part of the LettCup app family.
 
 ![LettMine](docs/screenshot.png)
 
-* **Профили-сборки.** У каждого профиля своя версия игры, загрузчик (Vanilla или Fabric), память, иконка и папка с модами, мирами и настройками. Версии, библиотеки и Java скачиваются один раз и общие для всех профилей.
-* **Аккаунт.** Ник без регистрации или вход по лицензии Microsoft.
-* **Моды** включаются и отключаются галочками прямо в профиле.
-* **Лог** игры и лаунчера во вкладке, без окна консоли.
-* **Java** подбирается сама под версию игры.
-* Русский и английский интерфейс, акцентный цвет на выбор.
+* **Profiles.** Each profile has its own game version, loader (Vanilla or Fabric), memory, icon and folder with mods, worlds and settings. Versions, libraries and Java are downloaded once and shared by all profiles.
+* **Account.** Play with an offline nickname or sign in with a Microsoft account that owns the game.
+* **Mods** are switched on and off with checkboxes right in the profile.
+* **Log** of the game and the launcher in a tab — no console window.
+* **Java** is picked automatically for the game version.
+* Russian and English interface, selectable accent color.
 
-## Установка
+## Installation
 
-1. Установите [Python 3.11 или новее](https://www.python.org/downloads/) с галочкой «Add python.exe to PATH».
-2. Скачайте архив `LettMine-<версия>-windows.zip` со страницы [релизов](https://github.com/mLeviGen/lettmine/releases/latest) и распакуйте в любую папку.
-3. Запустите `LettMine.bat`. При первом запуске он подготовит окружение (около минуты), дальше лаунчер открывается сразу.
-4. Потом запускайте `LettMine.exe`: из него можно сделать ярлык или закрепить на панели задач.
+1. Install [Python 3.11 or newer](https://www.python.org/downloads/) with “Add python.exe to PATH” checked.
+2. Download `LettMine-<version>-windows.zip` from the [releases](https://github.com/mLeviGen/lettmine/releases/latest) page and unpack it anywhere.
+3. Run `LettMine.bat`. On the first run it prepares the environment (about a minute); after that the launcher opens right away.
+4. From then on, start `LettMine.exe` — you can create a shortcut to it or pin it to the taskbar.
 
-Данные игры хранятся в папке `.lettmine` рядом с лаунчером, настройки — в `app/data/config.json`.
+Game data is stored in the `.lettmine` folder next to the launcher, settings in `app/data/config.json`.
 
-## Вход по лицензии
+## Licensed sign-in
 
-Нужен Client ID приложения Azure, которому Mojang выдала доступ к Minecraft API:
+It needs the Client ID of an Azure app that Mojang has granted access to the Minecraft API:
 
-1. [portal.azure.com](https://portal.azure.com) → Microsoft Entra ID → «Регистрация приложений» → «Новая регистрация».
-2. Типы учётных записей — с **личными учётными записями Microsoft**. URI перенаправления — «Общедоступный клиент/собственный (мобильные и классические)», `http://localhost:51735`.
-3. Подайте заявку Mojang: [aka.ms/mce-reviewappid](https://aka.ms/mce-reviewappid).
-4. Вставьте Client ID в «Настройки → Вход по лицензии».
+1. [portal.azure.com](https://portal.azure.com) → Microsoft Entra ID → App registrations → New registration.
+2. Supported account types must include **personal Microsoft accounts**. Redirect URI: “Public client/native (mobile & desktop)”, `http://localhost:51735`.
+3. Apply to Mojang: [aka.ms/mce-reviewappid](https://aka.ms/mce-reviewappid).
+4. Paste the Client ID into Settings → Licensed sign-in.
 
-## Разработка
+## Development
 
 ```powershell
 python -m venv .venv
@@ -37,18 +37,18 @@ python -m venv .venv
 .venv\Scripts\python app.py
 ```
 
-| Команда | Что делает |
+| Command | What it does |
 |---|---|
-| `tools\make_exe.py` | собирает `LettMine.exe` и ярлык (нужен MinGW: gcc + windres) |
-| `tools\make_icon.py` | пересобирает иконки из логотипа |
-| `tools\check_i18n.py` | проверяет, что у всех строк есть английский перевод |
-| `tools\package.py` | собирает архив релиза в `dist\` |
+| `tools\make_exe.py` | builds `LettMine.exe` and a shortcut (needs MinGW: gcc + windres) |
+| `tools\make_icon.py` | rebuilds the icons from the logo |
+| `tools\check_i18n.py` | checks that every string has an English translation |
+| `tools\package.py` | builds the release archive into `dist\` |
 
-Правила дизайна (общие для приложений LettCup) — в [docs/DESIGN.md](docs/DESIGN.md).
+Design rules shared by LettCup apps are in [docs/DESIGN.md](docs/DESIGN.md) (in Russian).
 
-## Релизы
+## Releases
 
-Версия задаётся в одном месте — `app/version.py`. Чтобы выпустить релиз:
+The version is defined in one place — `app/version.py`. To publish a release:
 
 ```powershell
 git commit -am "LettMine 0.9.1: ..."
@@ -56,11 +56,11 @@ git tag v0.9.1
 git push --follow-tags
 ```
 
-GitHub Actions соберёт `LettMine.exe` и архив и опубликует релиз со списком изменений. Тег должен совпадать с версией в `app/version.py`.
+GitHub Actions builds `LettMine.exe` and the archive and publishes the release with a changelog. The tag must match the version in `app/version.py`.
 
-## Сторонние компоненты
+## Third-party components
 
 * [minecraft-launcher-lib](https://codeberg.org/JakobDev/minecraft-launcher-lib), [PyQt6](https://www.riverbankcomputing.com/software/pyqt/).
-* Шрифт [Nunito](https://github.com/googlefonts/nunito) — SIL Open Font License 1.1 (`app/assets/fonts/OFL.txt`).
+* [Nunito](https://github.com/googlefonts/nunito) font — SIL Open Font License 1.1 (`app/assets/fonts/OFL.txt`).
 
-Minecraft — товарный знак Mojang Studios. LettMine — неофициальный лаунчер, не связанный с Mojang и Microsoft.
+Minecraft is a trademark of Mojang Studios. LettMine is an unofficial launcher, not affiliated with Mojang or Microsoft.
