@@ -1,0 +1,66 @@
+# Релиз LettMine: по тегу vX.Y.Z собирает LettMine.exe и архив и публикует релиз.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Тег релиза (например, v0.9.0) — должен уже существовать"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Версия в app/version.py совпадает с тегом
+        shell: pwsh
+        run: |
+          $version = python -c "import sys; sys.path.insert(0, '.'); from app.version import VERSION; print(VERSION)"
+          if ("v$version" -ne $env:TAG) { throw "Тег $env:TAG не совпадает с версией $version в app/version.py" }
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: MinGW для LettMine.exe
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: mingw-w64-x86_64-gcc
+
+      - name: Сборка LettMine.exe
+        shell: pwsh
+        run: |
+          $env:PATH = "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin;$env:PATH"
+          python tools/make_exe.py --no-shortcut
+
+      - name: Проверка переводов
+        run: python tools/check_i18n.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Архив релиза
+        run: python tools/package.py
+        env:
+          PYTHONIOENCODING: utf-8
+
+      - name: Публикация релиза
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TAG }}
+          name: LettMine ${{ env.VERSION }}
+          generate_release_notes: true
+          files: dist/LettMine-${{ env.VERSION }}-windows.zip

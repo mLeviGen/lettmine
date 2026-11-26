@@ -115,3 +115,31 @@ def delete(config, pid, remove_files=False):
         rest = config.config["instances"]
         config.config["selected_instance"] = rest[0]["id"] if rest else None
     config.save_config()
+
+
+def icon(config, profile):
+    """Иконка профиля для отрисовки: {"emoji": …} или {"image": абсолютный путь}; None — обычная."""
+    ic = (profile or {}).get("icon")
+    if not ic:
+        return None
+    if ic.get("image"):
+        path = os.path.join(game_dir(config, profile), ic["image"])
+        return {"image": path} if os.path.isfile(path) else None
+    return dict(ic)
+
+
+def set_image_icon(config, pid, source):
+    """Копирует выбранную картинку в папку профиля (profile-icon.*) и делает её иконкой."""
+    p = get(config, pid)
+    if p is None or not os.path.isfile(source):
+        return
+    folder = game_dir(config, p)
+    os.makedirs(folder, exist_ok=True)
+    for old in os.listdir(folder):
+        if old.startswith("profile-icon."):
+            os.remove(os.path.join(folder, old))
+    ext = os.path.splitext(source)[1].lower() or ".png"
+    name = "profile-icon" + ext
+    shutil.copyfile(source, os.path.join(folder, name))
+    p["icon"] = {"image": name}
+    config.save_config()

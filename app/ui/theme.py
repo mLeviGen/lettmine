@@ -49,6 +49,15 @@ def load_fonts():
         for name in os.listdir(folder):
             if name.lower().endswith(".ttf"):
                 QFontDatabase.addApplicationFont(os.path.join(folder, name))
+    # Шрифт по умолчанию для всех виджетов. Вертикальный хинтинг держит буквы на одной
+    # базовой линии при дробном масштабе Windows (125%, 150%) — иначе текст «пляшет».
+    from PyQt6.QtGui import QFont, QGuiApplication
+    app = QGuiApplication.instance()
+    if app is not None:
+        f = QFont(FONT)
+        f.setPixelSize(14)
+        f.setHintingPreference(QFont.HintingPreference.PreferVerticalHinting)
+        app.setFont(f)
 
 
 def resolve(styles):
@@ -157,8 +166,9 @@ def stylesheet(t):
     QScrollBar::handle {{ background: {t['surface_2']}; border-radius: 3px; min-height: 30px; min-width: 30px; }}
     QScrollBar::add-line, QScrollBar::sub-line, QScrollBar::add-page, QScrollBar::sub-page {{ width: 0; height: 0; background: none; }}
 
-    QMenu {{ background: {t['surface']}; border: 1px solid {t['surface_2']}; border-radius: 14px; padding: 6px; }}
-    QMenu::item {{ padding: 8px 20px; border-radius: 9px; }}
+    /* Всплывающие окна скругляет сама Windows 11 (DWM, радиус 8, с тенью) — см. round_popup() */
+    QMenu {{ background: {t['surface']}; border: none; padding: 5px; }}
+    QMenu::item {{ padding: 8px 20px; border-radius: 6px; }}
     QMenu::item:selected {{ background: {t['surface_2']}; }}
 
     QDialog QPushButton, QMessageBox QPushButton, QInputDialog QPushButton {{

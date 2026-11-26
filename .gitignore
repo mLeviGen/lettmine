@@ -22,3 +22,9 @@ app/data/styles.json
 
 # Промежуточные файлы сборки LettMine.exe
 tools/launcher/*.res
+
+# Собранный запускатель (tools/make_exe.py собирает его заново)
+/LettMine.exe
+
+# Архивы релизов (tools/package.py)
+dist/

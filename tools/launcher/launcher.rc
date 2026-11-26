@@ -1,10 +1,18 @@
 #include <winver.h>
 
+/* VER_NUM и VER_STR подставляет tools/make_exe.py из app/version.py */
+#ifndef VER_NUM
+#define VER_NUM 0,0,0,0
+#endif
+#ifndef VER_STR
+#define VER_STR "0.0.0"
+#endif
+
 1 ICON "../../app/assets/icon.ico"
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION     0,9,0,0
-PRODUCTVERSION  0,9,0,0
+FILEVERSION     VER_NUM
+PRODUCTVERSION  VER_NUM
 FILEFLAGSMASK   0x3fL
 FILEFLAGS       0x0L
 FILEOS          VOS_NT_WINDOWS32
@@ -17,11 +25,11 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "LettCup"
             VALUE "FileDescription",  "LettMine"
-            VALUE "FileVersion",      "0.9.0.0"
+            VALUE "FileVersion",      VER_STR
             VALUE "InternalName",     "LettMine"
             VALUE "OriginalFilename", "LettMine.exe"
             VALUE "ProductName",      "LettMine"
-            VALUE "ProductVersion",   "0.9.0.0"
+            VALUE "ProductVersion",   VER_STR
         END
     END
     BLOCK "VarFileInfo"

@@ -11,12 +11,12 @@ if not exist ".venv\Scripts\pythonw.exe" (
     ".venv\Scripts\python.exe" -m pip install -r requirements.txt || (echo Не удалось установить зависимости. & pause & exit /b 1)
 )
 
-if not exist ".venv\Scripts\LettMine.exe" (
+if not exist "LettMine.exe" (
     ".venv\Scripts\python.exe" tools\make_exe.py >nul 2>&1
 )
 
-if exist ".venv\Scripts\LettMine.exe" (
-    start "" ".venv\Scripts\LettMine.exe"
+if exist "LettMine.exe" (
+    start "" "LettMine.exe"
 ) else (
     start "" ".venv\Scripts\pythonw.exe" app.py
 )

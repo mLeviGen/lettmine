@@ -2,11 +2,11 @@ import ctypes
 import html
 import os
 
-from PyQt6.QtCore import QEvent, QPoint, QPropertyAnimation, Qt, QTimer, QUrl
+from PyQt6.QtCore import QEvent, QPoint, Qt, QTimer, QUrl
 from PyQt6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication
 from PyQt6.QtWidgets import (
-    QApplication, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QFileDialog,
-    QGraphicsOpacityEffect, QGridLayout, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem,
+    QApplication, QButtonGroup, QBoxLayout, QCheckBox, QColorDialog, QComboBox, QFileDialog,
+    QGridLayout, QHBoxLayout, QLineEdit, QListWidget, QListWidgetItem,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QScrollArea, QSpinBox, QStackedWidget,
     QVBoxLayout, QWidget,
 )
@@ -14,10 +14,11 @@ from PyQt6.QtWidgets import (
 from app import i18n
 from app.i18n import tr
 from app.ui import theme as th
+from app.ui import winframe
 from app.ui.logbus import bus, log
 from app.ui.widgets import (
-    G, Avatar, Button3D, Card, ColorChip, FlowGrid, LaunchStatus, NavRail, Panel, Segmented,
-    TitleBar, label, logo_icon,
+    G, Avatar, Button3D, Card, ColorChip, EmptyHint, FlowGrid, IconChip, LaunchStatus, NavRail, PageFade,
+    Panel, Segmented, TitleBar, label, logo_icon,
 )
 from app.ui.worker import GameWorker, LoginWorker, VersionListWorker
 from app.utils import account as acc_mod
@@ -26,9 +27,21 @@ from app.utils.config import Config
 from app.utils.versions import Versions
 
 APP_TITLE = "LettMine"
-APP_VERSION = "0.9"
-RESIZE_MARGIN = 6
+from app.version import VERSION as APP_VERSION  # noqa: E402
 NARROW = 720  # уже этого (без меню) — блоки перестраиваются в колонку
+
+PROFILE_EMOJI = ["⛏️", "🗡️", "🏰", "🌲", "💎", "🔥", "🐷", "🧱", "🍄", "🐉", "🌙", "⚡"]
+
+FUN = [
+    ("^_^", "Алмазы сами себя не накопают"),
+    ("\\(^o^)/", "Сегодня точно без лавы"),
+    ("¯\\_(ツ)_/¯", "Где мой дом? Где-то там"),
+    ("(¬‿¬)", "Свинья одобряет этот лаунчер"),
+    ("(-_-) zzZ", "Ещё один блок — и спать"),
+    ("(⌐■_■)", "Криперы не пройдут"),
+    ("(o_O)", "Копать вниз — плохая идея. Но мы копаем"),
+    ("(•‿•)", "Не забудь взять кровать"),
+]
 
 _windows = []  # держим ссылку на окно (при смене языка создаётся новое)
 
@@ -65,17 +78,6 @@ def profile_subtitle(p):
     return f"Minecraft {p['mc']} · {loader}"
 
 
-def round_window_corners(widget):
-    """Скруглённые углы окна без рамки в Windows 11 (DWMWA_WINDOW_CORNER_PREFERENCE)."""
-    if os.name != "nt":
-        return
-    try:
-        pref = ctypes.c_int(2)  # DWMWCP_ROUND
-        ctypes.windll.dwmapi.DwmSetWindowAttribute(int(widget.winId()), 33, ctypes.byref(pref), ctypes.sizeof(pref))
-    except Exception:
-        pass
-
-
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -86,11 +88,13 @@ class MainWindow(QMainWindow):
         self.login_worker = None
         self.version_worker = None
         self.current_page = None
-        self.page_anims = []
         self.editing = None  # id редактируемого профиля, None — новый
         self.pending_version = None
         self.available_versions = []
         self.home_cards, self.list_cards = {}, {}
+        self._home_sig = self._list_sig = None  # профили не пересоздаются без изменений
+        self.ed_icon = None          # иконка профиля в редакторе
+        self.ed_icon_file = None     # выбранная картинка (ещё не скопирована)
         self.account = acc_mod.get_account(self.config)
         prof.get_profiles(self.config)  # перенос старых настроек в профили
 
@@ -147,7 +151,7 @@ class MainWindow(QMainWindow):
         self.refresh_profiles()
         self.open_page("home", animate=False)
         self.update_play_state()
-        QTimer.singleShot(0, lambda: round_window_corners(self))
+        QTimer.singleShot(0, lambda: winframe.install(self))
 
     # ---------- настройки ----------
     def setting(self, key, default=None):
@@ -182,24 +186,35 @@ class MainWindow(QMainWindow):
         if animate:
             self.animate_page(page)
 
+    @staticmethod
+    def settle_layout(page):
+        """Рассчитать раскладку страницы сейчас, до первого кадра: иначе карточки
+        несколько кадров стоят «как попало» и проскакивают на место."""
+        parent = page.parentWidget()
+        if parent is not None:
+            # Скрытая страница стека хранит старую геометрию (по умолчанию 640×480) —
+            # без этого она на мгновение рисуется не того размера и «съезжает»
+            page.setGeometry(parent.rect())
+        for _ in range(3):  # вложенные раскладки (страница → скролл → сетка) — по цепочке
+            QApplication.sendPostedEvents(None, QEvent.Type.LayoutRequest)
+            for lay in [page.layout()] + [w.layout() for w in page.findChildren(QWidget)]:
+                if lay is not None:
+                    lay.activate()
+
     def animate_page(self, page):
-        """Появление страницы: прозрачность 0→1 и сдвиг снизу (как меню в Lettudio)."""
-        effect = QGraphicsOpacityEffect(page)
-        page.setGraphicsEffect(effect)
-        fade = QPropertyAnimation(effect, b"opacity", page)
-        fade.setStartValue(0.0)
-        fade.setEndValue(1.0)
-        fade.setDuration(th.NORMAL)
-        fade.setEasingCurve(th.CURVE)
-        slide = QPropertyAnimation(page, b"pos", page)
-        slide.setStartValue(QPoint(page.x(), page.y() + 16))
-        slide.setEndValue(QPoint(page.x(), page.y()))
-        slide.setDuration(th.NORMAL)
-        slide.setEasingCurve(th.CURVE)
-        fade.finished.connect(lambda: page.setGraphicsEffect(None))
-        self.page_anims = [fade, slide]
-        fade.start()
-        slide.start()
+        """Появление страницы: проявление и лёгкий сдвиг снизу (как меню в Lettudio)."""
+        self.settle_layout(page)
+        parent = page.parentWidget()
+        fader = getattr(parent, "_fader", None)
+        if fader is None:
+            fader = parent._fader = PageFade(parent)
+        fader.start(self.snapshot(page))
+
+    def snapshot(self, page):
+        """Снимок области страницы прямо из окна — с настоящим фоном, как на экране."""
+        from PyQt6.QtCore import QRect
+        top_left = page.mapTo(self, QPoint(0, 0))
+        return self.grab(QRect(top_left, page.size()))
 
     # ---------- главная ----------
     def build_home(self):
@@ -210,12 +225,21 @@ class MainWindow(QMainWindow):
         lay.addWidget(label(tr("ПРОФИЛЬ ДЛЯ ИГРЫ"), "section"))
         self.home_grid = FlowGrid()
         lay.addWidget(self.home_grid)
-        lay.addStretch()
+        self.home_hint = EmptyHint([(face, tr(text)) for face, text in FUN])
+        lay.addWidget(self.home_hint, 1)
         return area
 
-    def profile_card(self, p, on_click):
+    def profile_avatar(self, p, size=46):
         glyph = G.MODS if p.get("loader") == prof.FABRIC else G.GAME
-        card = Card(p["name"], profile_subtitle(p), Avatar(glyph=glyph, round_=False))
+        return Avatar(glyph=glyph, round_=False, icon=prof.icon(self.config, p), size=size)
+
+    @staticmethod
+    def profiles_signature(profiles, current):
+        return (tuple((p["id"], p["name"], p["mc"], p.get("loader"), repr(p.get("icon"))) for p in profiles),
+                current["id"] if current else None, i18n.language())
+
+    def profile_card(self, p, on_click):
+        card = Card(p["name"], profile_subtitle(p), self.profile_avatar(p))
         pid = p["id"]
         card.clicked.connect(lambda: on_click(pid))
         card.context_requested.connect(lambda pos: self.profile_menu(pid, pos))
@@ -224,6 +248,12 @@ class MainWindow(QMainWindow):
     def refresh_home(self):
         self.refresh_account()
         current = prof.selected(self.config)
+        profiles = prof.get_profiles(self.config)
+        sig = self.profiles_signature(profiles, current)
+        if sig == self._home_sig:  # ничего не поменялось — карточки остаются на месте
+            self.update_play_state()
+            return
+        self._home_sig = sig
         cards = []
         self.home_cards = {}
         for p in prof.get_profiles(self.config):
@@ -245,6 +275,11 @@ class MainWindow(QMainWindow):
 
     def select_profile(self, pid):
         prof.select(self.config, pid)
+        profiles, current = prof.get_profiles(self.config), prof.selected(self.config)
+        if self._home_sig is not None:
+            self._home_sig = self.profiles_signature(profiles, current)
+        if self._list_sig is not None:
+            self._list_sig = self.profiles_signature(profiles, current)
         for cid, card in self.home_cards.items():
             card.set_selected(cid == pid, animate=True)
         for cid, card in self.list_cards.items():
@@ -482,6 +517,22 @@ class MainWindow(QMainWindow):
         self.ed_memory.setFixedWidth(190)
         form.addWidget(label(tr("Память"), "title"), 3, 0)
         form.addWidget(self.ed_memory, 3, 1, Qt.AlignmentFlag.AlignLeft)
+
+        self.icon_group = QButtonGroup(self)
+        self.icon_group.setExclusive(True)
+        self.icon_chips = []
+        chips = [IconChip(None, G.GAME, tr("Обычная"))] + [IconChip({"emoji": e}, None, e) for e in PROFILE_EMOJI]
+        self.custom_chip = IconChip({"image": ""}, G.IMAGE, tr("Своя картинка"))
+        chips.append(self.custom_chip)
+        for chip in chips:
+            self.icon_group.addButton(chip)
+            chip.clicked.connect(lambda _=False, c=chip: self.choose_icon(c))
+            self.icon_chips.append(chip)
+        self.icon_grid = FlowGrid(min_col_width=46, max_cols=len(chips), stretch=False)
+        self.icon_grid.grid.setSpacing(4)
+        self.icon_grid.set_items(chips)
+        form.addWidget(label(tr("Иконка"), "title"), 4, 0, Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
+        form.addWidget(self.icon_grid, 4, 1)
         lay.addWidget(form_panel)
 
         actions = QHBoxLayout()
@@ -519,6 +570,10 @@ class MainWindow(QMainWindow):
 
     def refresh_profiles(self):
         current = prof.selected(self.config)
+        sig = self.profiles_signature(prof.get_profiles(self.config), current)
+        if sig == self._list_sig:
+            return
+        self._list_sig = sig
         self.list_cards = {}
         cards = []
         for p in prof.get_profiles(self.config):
@@ -544,6 +599,9 @@ class MainWindow(QMainWindow):
         self.ed_name.setPlaceholderText(tr("Новый профиль"))
         self.ed_loader.set_index(1 if (p is None or p.get("loader") == prof.FABRIC) else 0, animate=False)
         self.ed_memory.setValue(p.get("memory", 0) if p else 0)
+        self.ed_icon = dict(p["icon"]) if p and p.get("icon") else None
+        self.ed_icon_file = None
+        self.sync_icon_chips(prof.icon(self.config, p) if p else None)
         self.ed_save.setText(tr("Сохранить") if p else tr("Создать"))
         self.ed_save.updateGeometry()
         self.ed_folder.setVisible(bool(p))
@@ -591,6 +649,37 @@ class MainWindow(QMainWindow):
             if i >= 0:
                 self.ed_version.setCurrentIndex(i)
 
+    # ---------- иконка профиля ----------
+    def sync_icon_chips(self, icon):
+        """Отметить выбранную иконку; своя картинка показывается в последней ячейке."""
+        self.custom_chip.icon = {"image": icon["image"]} if icon and icon.get("image") else {"image": ""}
+        self.custom_chip.update()
+        target = self.icon_chips[0]
+        if icon and icon.get("emoji"):
+            target = next((c for c in self.icon_chips if (c.icon or {}).get("emoji") == icon["emoji"]), target)
+        elif icon and icon.get("image"):
+            target = self.custom_chip
+        target.setChecked(True)
+
+    def choose_icon(self, chip):
+        if chip is self.custom_chip:
+            path, _ = QFileDialog.getOpenFileName(self, tr("Своя картинка"), "",
+                                                  f"{tr('Картинки')} (*.png *.jpg *.jpeg *.webp *.bmp)")
+            if not path:  # отменили — вернуть отметку на прежнюю иконку
+                if self.ed_icon_file:
+                    self.sync_icon_chips({"image": self.ed_icon_file})
+                elif (self.ed_icon or {}).get("image"):
+                    self.sync_icon_chips(prof.icon(self.config, prof.get(self.config, self.editing)))
+                else:
+                    self.sync_icon_chips(self.ed_icon)
+                return
+            self.ed_icon_file = path
+            self.ed_icon = {"image": path}
+            self.sync_icon_chips({"image": path})
+            return
+        self.ed_icon_file = None
+        self.ed_icon = dict(chip.icon) if chip.icon else None
+
     def update_mods_section(self):
         p = prof.get(self.config, self.editing) if self.editing else None
         fabric = self.ed_loader.index == 1
@@ -617,10 +706,15 @@ class MainWindow(QMainWindow):
             return
         loader = prof.FABRIC if self.ed_loader.index == 1 else prof.VANILLA
         memory = self.ed_memory.value()
+        icon = self.ed_icon if (self.ed_icon or {}).get("emoji") else None
         if self.editing:
             p = prof.update(self.config, self.editing, name=name, mc=mc, loader=loader, memory=memory)
         else:
             p = prof.create(self.config, name, mc, loader, memory)
+        if self.ed_icon_file:
+            prof.set_image_icon(self.config, p["id"], self.ed_icon_file)
+        elif (self.ed_icon or {}).get("image") is None:
+            prof.update(self.config, p["id"], icon=icon)
         log(f"{p['name']}: {profile_subtitle(p)}")
         self.edit_profile(p["id"])
         self.refresh_home()
@@ -772,7 +866,8 @@ class MainWindow(QMainWindow):
         self.java_edit = QLineEdit(self.config.java_path)
         self.java_edit.setPlaceholderText(tr("Автоматически — встроенная Java нужной версии"))
         self.java_edit.editingFinished.connect(lambda: setattr(self.config, "java_path", self.java_edit.text().strip()))
-        browse = Button3D(tr("Обзор"))
+        browse = Button3D("", G.FOLDER)
+        browse.setToolTip(tr("Обзор"))
         browse.clicked.connect(self.browse_java)
         auto = Button3D(tr("Авто"))
         auto.clicked.connect(lambda: (self.java_edit.clear(), setattr(self.config, "java_path", "")))
@@ -964,7 +1059,6 @@ class MainWindow(QMainWindow):
         if self.busy():
             # Установка идёт в фоне — дождёмся её, иначе поток оборвётся на середине
             self.worker.wait(15000)
-        QApplication.instance().removeEventFilter(self)
         try:
             bus.game_exited.disconnect(self.on_game_exited)
             bus.line.disconnect(self.append_log)
@@ -1011,11 +1105,6 @@ class MainWindow(QMainWindow):
         if (x, y) != (g.left(), g.top()):
             self.move(x, y)
 
-    def showEvent(self, e):
-        super().showEvent(e)
-        if self.isMaximized():
-            self.setGeometry(self.work_area())
-
     def moveEvent(self, e):
         super().moveEvent(e)
         if not QApplication.mouseButtons():  # пока окно тянут мышью — не мешаем
@@ -1024,48 +1113,23 @@ class MainWindow(QMainWindow):
     def changeEvent(self, e):
         if e.type() == QEvent.Type.WindowStateChange:
             self.title_bar.update_max_icon(self.isMaximized())
-            if self.isMaximized():
-                # Окно без рамки не должно перекрывать панель задач при развороте
-                QTimer.singleShot(0, lambda: self.isMaximized() and self.geometry() != self.work_area()
-                                  and self.setGeometry(self.work_area()))
-            else:
+            if not self.isMaximized():
                 QTimer.singleShot(0, self.keep_in_work_area)
         super().changeEvent(e)
 
-    def edges_at(self, global_pos):
-        if self.isMaximized():
-            return Qt.Edge(0)
-        pos = self.mapFromGlobal(global_pos)
-        w, h, m = self.width(), self.height(), RESIZE_MARGIN
-        edges = Qt.Edge(0)
-        if pos.x() <= m:
-            edges |= Qt.Edge.LeftEdge
-        if pos.x() >= w - m:
-            edges |= Qt.Edge.RightEdge
-        if pos.y() <= m:
-            edges |= Qt.Edge.TopEdge
-        if pos.y() >= h - m:
-            edges |= Qt.Edge.BottomEdge
-        return edges
+    def nativeEvent(self, event_type, message):
+        """Рамка Windows 11: углы, тень, Snap, изменение размера — см. app/ui/winframe.py."""
+        if event_type == b"windows_generic_MSG":
+            handled, result = winframe.handle(self, message)
+            if handled:
+                return True, result
+        # Не super().nativeEvent: в PyQt6 вызов базовой реализации роняет процесс
+        return False, 0
 
     def eventFilter(self, obj, e):
-        """Изменение размера окна без рамки: тянем за край."""
-        t = e.type()
-        if t in (QEvent.Type.MouseMove, QEvent.Type.MouseButtonPress) and isinstance(obj, QWidget) and obj.window() is self:
-            edges = self.edges_at(e.globalPosition().toPoint())
-            if t == QEvent.Type.MouseButtonPress and edges and e.button() == Qt.MouseButton.LeftButton:
-                self.windowHandle().startSystemResize(edges)
-                return True
-            if t == QEvent.Type.MouseMove and not e.buttons():
-                E = Qt.Edge
-                if edges in (E.LeftEdge | E.TopEdge, E.RightEdge | E.BottomEdge):
-                    self.setCursor(Qt.CursorShape.SizeFDiagCursor)
-                elif edges in (E.RightEdge | E.TopEdge, E.LeftEdge | E.BottomEdge):
-                    self.setCursor(Qt.CursorShape.SizeBDiagCursor)
-                elif edges & (E.LeftEdge | E.RightEdge):
-                    self.setCursor(Qt.CursorShape.SizeHorCursor)
-                elif edges & (E.TopEdge | E.BottomEdge):
-                    self.setCursor(Qt.CursorShape.SizeVerCursor)
-                else:
-                    self.unsetCursor()
+        """Всплывающие окна (меню, списки, подсказки) скругляет Windows 11, как у системных."""
+        if e.type() == QEvent.Type.Show and isinstance(obj, QWidget) and obj.isWindow() and obj is not self:
+            flags = obj.windowFlags()
+            if flags & Qt.WindowType.Popup == Qt.WindowType.Popup or isinstance(obj, QMenu):
+                winframe.set_corners(obj)
         return super().eventFilter(obj, e)

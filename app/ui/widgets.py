@@ -26,6 +26,7 @@ class G:
     PLAY, ADD, FOLDER, DOWNLOAD, GAME = 0xF5B0, 0xE710, 0xE838, 0xE896, 0xE7FC
     REFRESH, EDIT, CHECK, PERSON = 0xE72C, 0xE70F, 0xE73E, 0xE77B
     LOG, BACK, DELETE, COPY, CLEAR = 0xE756, 0xE72B, 0xE74D, 0xE8C8, 0xE894
+    IMAGE = 0xE8B9
 
 
 _icon_family = None
@@ -44,6 +45,7 @@ def icon_family():
 def icon_font(px):
     f = QFont(icon_family())
     f.setPixelSize(int(px))
+    f.setHintingPreference(QFont.HintingPreference.PreferVerticalHinting)
     return f
 
 
@@ -51,6 +53,8 @@ def ui_font(px, weight=QFont.Weight.Normal):
     f = QFont(th.FONT)
     f.setPixelSize(int(px))
     f.setWeight(weight)
+    # Без хинтинга при дробном масштабе Windows (125%) буквы «пляшут» по высоте
+    f.setHintingPreference(QFont.HintingPreference.PreferVerticalHinting)
     return f
 
 
@@ -694,35 +698,107 @@ class NavRail(QWidget):
 
 # ---------------------------------------------------------------- карточки
 
-class Avatar(QWidget):
-    """Обложка карточки: круг с буквой (профиль) или скруглённый квадрат с иконкой (версия)."""
+EMOJI_FONT = "Segoe UI Emoji"
 
-    def __init__(self, text="", glyph=None, round_=True, parent=None):
+
+def paint_cover(p, r, text="", glyph=None, round_=True, icon=None, radius=12):
+    """Обложка: круг/скруглённый квадрат с буквой, глифом, эмодзи или картинкой.
+
+    icon — иконка профиля: {"emoji": "⛏"} или {"image": "путь к файлу"}.
+    """
+    from PyQt6.QtGui import QPixmap
+    path = QPainterPath()
+    if round_:
+        path.addEllipse(r)
+    else:
+        path.addRoundedRect(r, radius, radius)  # концентрично радиусу карточки 18 с отступом ~6
+    image = (icon or {}).get("image")
+    pm = QPixmap(image) if image else None
+    if pm is not None and not pm.isNull():
+        p.save()
+        p.setClipPath(path)
+        scaled = pm.scaled(int(r.width() * 2), int(r.height() * 2),
+                           Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                           Qt.TransformationMode.SmoothTransformation)
+        src = QRectF((scaled.width() - r.width() * 2) / 2, (scaled.height() - r.height() * 2) / 2,
+                     r.width() * 2, r.height() * 2)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.drawPixmap(r, scaled, src)
+        p.restore()
+        return
+    grad = QLinearGradient(r.topLeft(), r.bottomRight())
+    grad.setColorAt(0, mix(T["accent"], T["surface"], 0.25))
+    grad.setColorAt(1, th.fill())
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(grad)
+    p.drawPath(path)
+    emoji = (icon or {}).get("emoji")
+    if emoji:
+        f = QFont(EMOJI_FONT)
+        f.setPixelSize(int(r.height() * 0.52))
+        p.setFont(f)
+        p.setPen(QColor("#ffffff"))
+        p.drawText(r, Qt.AlignmentFlag.AlignCenter, emoji)
+        return
+    p.setPen(QColor("#ffffff"))
+    if glyph:
+        p.setFont(icon_font(r.height() * 0.43))
+        p.drawText(r, Qt.AlignmentFlag.AlignCenter, chr(glyph))
+    else:
+        p.setFont(ui_font(r.height() * 0.41, QFont.Weight.Bold))
+        p.drawText(r, Qt.AlignmentFlag.AlignCenter, text[:1].upper())
+
+
+class Avatar(QWidget):
+    """Обложка карточки: круг с буквой (аккаунт) или скруглённый квадрат с иконкой (профиль)."""
+
+    def __init__(self, text="", glyph=None, round_=True, icon=None, size=46, parent=None):
         super().__init__(parent)
-        self.text, self.glyph, self.round = text, glyph, round_
-        self.setFixedSize(46, 46)
+        self.text, self.glyph, self.round, self.icon = text, glyph, round_, icon
+        self.setFixedSize(size, size)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
 
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        r = QRectF(self.rect())
-        grad = QLinearGradient(r.topLeft(), r.bottomRight())
-        grad.setColorAt(0, mix(T["accent"], T["surface"], 0.25))
-        grad.setColorAt(1, th.fill())
-        p.setPen(Qt.PenStyle.NoPen)
-        p.setBrush(grad)
-        if self.round:
-            p.drawEllipse(r)
-        else:
-            p.drawRoundedRect(r, 12, 12)  # концентрично радиусу карточки 18 с отступом ~6
-        p.setPen(QColor("#ffffff"))
-        if self.glyph:
-            p.setFont(icon_font(20))
-            p.drawText(r, Qt.AlignmentFlag.AlignCenter, chr(self.glyph))
-        else:
-            p.setFont(ui_font(19, QFont.Weight.Bold))
-            p.drawText(r, Qt.AlignmentFlag.AlignCenter, self.text[:1].upper())
+        paint_cover(p, QRectF(self.rect()), self.text, self.glyph, self.round, self.icon,
+                    radius=12 * self.width() / 46)
+        p.end()
+
+
+class IconChip(QAbstractButton):
+    """Вариант иконки профиля в редакторе: маленькая обложка с кольцом выбора."""
+
+    def __init__(self, icon=None, glyph=None, tooltip="", parent=None):
+        super().__init__(parent)
+        self.icon, self.glyph = icon, glyph
+        self.setToolTip(tooltip)
+        self.setCheckable(True)
+        self.setFixedSize(46, 46)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.sel = Tween(self)
+        self.press = Tween(self)
+        self.toggled.connect(lambda on: self.sel.to(1.0 if on else 0.0, th.NORMAL, th.SPRING if on else th.CURVE))
+
+    def mousePressEvent(self, e):
+        self.press.to(1.0, th.FAST)
+        super().mousePressEvent(e)
+
+    def mouseReleaseEvent(self, e):
+        self.press.to(0.0, th.SLOW, th.SPRING)
+        super().mouseReleaseEvent(e)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        sel = self.sel.value
+        if sel > 0.01:
+            p.setPen(QPen(alpha(T["accent"], sel), 2))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), 13, 13)
+        inset = 5 + 2 * self.press.value
+        paint_cover(p, QRectF(self.rect()).adjusted(inset, inset, -inset, -inset), glyph=self.glyph,
+                    round_=False, icon=self.icon, radius=9)
         p.end()
 
 
@@ -964,10 +1040,10 @@ class Segmented(QWidget):
 class FlowGrid(QWidget):
     """Сетка карточек, которая сама меняет число колонок под ширину (адаптивность)."""
 
-    def __init__(self, min_col_width=260, max_cols=3, parent=None):
+    def __init__(self, min_col_width=260, max_cols=3, stretch=True, parent=None):
         super().__init__(parent)
         from PyQt6.QtWidgets import QGridLayout
-        self.min_col_width, self.max_cols = min_col_width, max_cols
+        self.min_col_width, self.max_cols, self.stretch = min_col_width, max_cols, stretch
         self.grid = QGridLayout(self)
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setSpacing(th.EDGE)
@@ -978,6 +1054,7 @@ class FlowGrid(QWidget):
     def set_items(self, widgets):
         for w in self.items:
             self.grid.removeWidget(w)
+            w.hide()
             w.deleteLater()
         self.items = list(widgets)
         self.cols = 0
@@ -997,7 +1074,12 @@ class FlowGrid(QWidget):
         for i, w in enumerate(self.items):
             self.grid.addWidget(w, i // cols, i % cols)
         for c in range(self.max_cols):
-            self.grid.setColumnStretch(c, 1 if c < cols else 0)
+            self.grid.setColumnStretch(c, 1 if (self.stretch and c < cols) else 0)
+        if not self.stretch:  # мелкие элементы (иконки) — плотно слева, без растягивания
+            self.grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
+        # Расставить карточки сразу, а не в следующем цикле событий — иначе они
+        # на кадр появляются в углу и «проскакивают» на место
+        self.grid.activate()
 
     def minimumSizeHint(self):
         # Минимум — одна колонка, иначе сетка не даст окну сузиться
@@ -1008,3 +1090,81 @@ class FlowGrid(QWidget):
     def resizeEvent(self, e):
         super().resizeEvent(e)
         self._relayout()
+
+
+class EmptyHint(QWidget):
+    """Смайлик-каомодзи и шутка на пустом месте. Клик — следующая, с упругим «прыжком»."""
+
+    def __init__(self, items, parent=None):
+        super().__init__(parent)
+        import random
+        self.items = list(items)
+        random.shuffle(self.items)
+        self.index = 0
+        self.bounce = Tween(self, 1.0)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(150)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+
+    def mouseReleaseEvent(self, e):
+        if e.button() == Qt.MouseButton.LeftButton and self.items:
+            self.index = (self.index + 1) % len(self.items)
+            self.bounce.value = 0.6
+            self.bounce.to(1.0, th.SLOW + 200, th.SPRING)
+
+    def paintEvent(self, _):
+        if not self.items:
+            return
+        face, text = self.items[self.index]
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        r = QRectF(self.rect())
+        c = r.center()
+        s = self.bounce.value
+        p.save()
+        p.translate(c.x(), c.y() - 14)
+        p.scale(s, s)
+        p.setPen(alpha(T["accent"], 0.85))
+        f = ui_font(44, QFont.Weight.Bold)
+        p.setFont(f)
+        p.drawText(QRectF(-r.width() / 2, -40, r.width(), 64), Qt.AlignmentFlag.AlignCenter, face)
+        p.restore()
+        p.setPen(QColor(T["text_dim"]))
+        p.setFont(ui_font(14, QFont.Weight.Medium))
+        p.drawText(QRectF(0, c.y() + 30, r.width(), 24), Qt.AlignmentFlag.AlignCenter, text)
+        p.end()
+
+
+class PageFade(QWidget):
+    """Переход между страницами: снимок новой страницы проявляется поверх фона со сдвигом.
+
+    Анимируется картинка, а не живые виджеты — у карточек свои эффекты нажатия,
+    и вложенные QGraphicsEffect в Qt на первых кадрах рисуются со смещением.
+    """
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.pix = None
+        self.t = Tween(self, 1.0)
+        self.t.finished.connect(self.hide)
+        self.hide()
+
+    def start(self, pixmap):
+        self.pix = pixmap
+        self.setGeometry(self.parentWidget().rect())
+        self.raise_()
+        self.show()
+        self.t.value = 0.0
+        self.t.to(1.0, th.NORMAL, th.CURVE)
+
+    def paintEvent(self, _):
+        if self.pix is None:
+            return
+        p = QPainter(self)
+        t = self.t.value
+        p.fillRect(self.rect(), QColor(T["background"]))
+        p.setOpacity(t)
+        p.drawPixmap(0, round(8 * (1 - t)), self.pix)
+        p.end()

@@ -100,6 +100,22 @@ EN = {
     "{n} ГБ": "{n} GB",
     "Не удалось переименовать: {e}": "Could not rename: {e}",
 
+    # Иконка профиля
+    "Иконка": "Icon",
+    "Обычная": "Default",
+    "Своя картинка": "Custom image",
+    "Картинки": "Images",
+
+    # Шутки на пустом месте
+    "Алмазы сами себя не накопают": "Diamonds won't mine themselves",
+    "Сегодня точно без лавы": "No lava today. Probably",
+    "Где мой дом? Где-то там": "Where's my base? Somewhere over there",
+    "Свинья одобряет этот лаунчер": "The pig approves this launcher",
+    "Ещё один блок — и спать": "Just one more block, then bed",
+    "Криперы не пройдут": "Creepers shall not pass",
+    "Копать вниз — плохая идея. Но мы копаем": "Digging straight down is a bad idea. We dig anyway",
+    "Не забудь взять кровать": "Don't forget your bed",
+
     # Лог
     "Копировать": "Copy",
     "Очистить": "Clear",

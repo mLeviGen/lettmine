@@ -5,6 +5,8 @@ import subprocess
 
 import minecraft_launcher_lib
 
+from app.version import VERSION
+
 
 class Versions:
     def install_version(self, version, minecraft_directory, callback=None):
@@ -61,7 +63,7 @@ def build_launch_command(config, version, username, player_uuid=None, token=None
         "uuid": player_uuid or offline_uuid(username),
         "token": token or "0",
         "launcherName": "LettMine",
-        "launcherVersion": "0.9",
+        "launcherVersion": VERSION,
         "jvmArguments": [f"-Xmx{mem}G", f"-Xms{min(mem, 1)}G"],
     }
     if game_dir:

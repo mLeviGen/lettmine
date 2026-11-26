@@ -4,9 +4,10 @@
  * Запускает Python прямо в своём процессе (Py_Main из python3.dll), поэтому в диспетчере
  * задач и на панели задач приложение называется LettMine и имеет свою иконку, а не «Python».
  *
- * Лежит в .venv\Scripts\: рядом с родительской папкой есть pyvenv.cfg, по нему Python
- * находит и стандартную библиотеку (home = ...), и пакеты окружения (.venv\Lib\site-packages).
- * Скрипт — <папка проекта>\app.py. Собирается tools\make_exe.py.
+ * Лежит в папке проекта рядом с app.py. Окружение — .venv: из .venv\pyvenv.cfg берётся
+ * путь к Python (home = ...), а переменная __PYVENV_LAUNCHER__ (так же делает штатный
+ * запускатель venv) говорит Python использовать пакеты окружения .venv\Lib\site-packages.
+ * Собирается tools\make_exe.py.
  */
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -47,14 +48,13 @@ static int read_home(const wchar_t *cfg_path, wchar_t *home, size_t size) {
 
 int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
     (void)inst; (void)prev; (void)cmd; (void)show;
-    wchar_t exe[MAX_PATH], venv[MAX_PATH], root[MAX_PATH], cfg[MAX_PATH], home[MAX_PATH], script[MAX_PATH];
+    wchar_t exe[MAX_PATH], root[MAX_PATH], venv[MAX_PATH], cfg[MAX_PATH], home[MAX_PATH];
+    wchar_t script[MAX_PATH], venv_python[MAX_PATH], dll[MAX_PATH];
 
     GetModuleFileNameW(NULL, exe, MAX_PATH);
-    wcscpy(venv, exe);
-    parent_dir(venv);           /* ...\.venv\Scripts */
-    parent_dir(venv);           /* ...\.venv */
-    wcscpy(root, venv);
+    wcscpy(root, exe);
     parent_dir(root);           /* папка проекта */
+    swprintf(venv, MAX_PATH, L"%ls\\.venv", root);
 
     swprintf(cfg, MAX_PATH, L"%ls\\pyvenv.cfg", venv);
     if (!read_home(cfg, home, MAX_PATH)) {
@@ -62,9 +62,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE prev, PWSTR cmd, int show) {
         return 1;
     }
 
+    /* Python считает себя запущенным из .venv — пакеты окружения подхватятся */
+    swprintf(venv_python, MAX_PATH, L"%ls\\Scripts\\pythonw.exe", venv);
+    SetEnvironmentVariableW(L"__PYVENV_LAUNCHER__", venv_python);
+
     /* python3.dll перенаправляет вызовы в python3XX.dll — версия Python не зашита */
     SetDllDirectoryW(home);
-    wchar_t dll[MAX_PATH];
     swprintf(dll, MAX_PATH, L"%ls\\python3.dll", home);
     HMODULE py = LoadLibraryW(dll);
     if (!py) {

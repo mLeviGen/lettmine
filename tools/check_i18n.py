@@ -19,11 +19,15 @@ def strings(path):
             arg = node.args[0]
             if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
                 yield node.lineno, arg.value
-    # Названия цветов: переводятся через tr(name) из списка
-    if path.endswith("theme.py"):
-        from app.ui.theme import ACCENT_PRESETS
-        for name, _ in ACCENT_PRESETS:
-            yield 0, name
+    # Списки, которые переводятся через tr(переменная): шутки главной (FUN, второй
+    # элемент) и названия цветов (ACCENT_PRESETS, первый). Читаем из кода, без импорта —
+    # так проверка работает и там, где PyQt6 не установлен (сборка релиза).
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1:
+            name = getattr(node.targets[0], "id", None)
+            if name in ("FUN", "ACCENT_PRESETS"):
+                for pair in ast.literal_eval(node.value):
+                    yield node.lineno, pair[1] if name == "FUN" else pair[0]
 
 
 missing = []
