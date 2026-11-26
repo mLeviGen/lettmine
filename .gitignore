@@ -1,30 +1,13 @@
-# Окружение и кэш Python
 .venv/
 __pycache__/
 *.pyc
-
-# Данные игры (гигабайты: версии, ассеты, Java, моды, миры)
 .lettmine/
-
-# Логи и файлы, которые игра создаёт в рабочей папке
 logs/
 config/
 fabricloader.log
-
-# Личные настройки лаунчера: ник, аккаунт Microsoft, профили, пути, цвет.
-# В репозитории — только примеры (*.example.json); лаунчер начинает с них
-# и при первом сохранении создаёт свои config.json / styles.json.
 app/data/config.json
 app/data/styles.json
-
-# Ярлык с иконкой (абсолютные пути этого компьютера)
 *.lnk
-
-# Промежуточные файлы сборки LettMine.exe
 tools/launcher/*.res
-
-# Собранный запускатель (tools/make_exe.py собирает его заново)
 /LettMine.exe
-
-# Архивы релизов (tools/package.py)
 dist/
