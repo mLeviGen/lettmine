@@ -1125,7 +1125,7 @@ class EmptyHint(QWidget):
         p.save()
         p.translate(c.x(), c.y() - 14)
         p.scale(s, s)
-        p.setPen(alpha(T["accent"], 0.85))
+        p.setPen(mix(T["text_dim"], T["background"], 0.25))  # сероватый, как подпись, только чуть тише
         f = ui_font(44, QFont.Weight.Bold)
         p.setFont(f)
         p.drawText(QRectF(-r.width() / 2, -40, r.width(), 64), Qt.AlignmentFlag.AlignCenter, face)
