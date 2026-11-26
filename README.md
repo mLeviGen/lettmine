@@ -1,6 +1,6 @@
 # LettMine
 
-A Minecraft: Java Edition launcher for Windows, part of the LettCup app family.
+A Minecraft: Java Edition launcher for Windows.
 
 ![LettMine](docs/screenshot.png)
 
@@ -43,8 +43,6 @@ python -m venv .venv
 | `tools\make_icon.py` | rebuilds the icons from the logo |
 | `tools\check_i18n.py` | checks that every string has an English translation |
 | `tools\package.py` | builds the release archive into `dist\` |
-
-Design rules shared by LettCup apps are in [docs/DESIGN.md](docs/DESIGN.md) (in Russian).
 
 ## Releases
 
